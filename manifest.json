@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "u3c3 搜索·迅雷版",
+  "version": "1.0.0",
+  "description": "读取当前标签页标题中的番号，在 u3c3.com 搜索；点击结果复制 Magnet，勾选文件后直接发送到 NAS 迅雷（超级会员加速）下载。",
+  "permissions": ["activeTab", "clipboardWrite", "storage", "alarms"],
+  "host_permissions": [
+    "https://u3c3.com/*",
+    "https://www.u3c3.com/*",
+    "http://192.168.5.4:2345/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "u3c3 搜索·迅雷版",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

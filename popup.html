@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>u3c3 搜索·迅雷版</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <span class="logo">XL</span>
+      <span>u3c3 搜索<span class="ver">迅雷版</span></span>
+    </div>
+    <span id="query" class="query">—</span>
+  </header>
+
+  <!-- 迅雷下载状态区（置顶，仅插件发起的任务） -->
+  <section id="dl" class="dl-section hidden">
+    <div class="dl-head">
+      <span class="dl-title">迅雷下载</span>
+      <span id="dlMeta" class="dl-meta"></span>
+    </div>
+    <ul id="dlList" class="dl-list"></ul>
+  </section>
+
+  <!-- 主视图：搜索结果 -->
+  <main id="mainView">
+    <div id="status" class="status">
+      <div id="spinner" class="spinner"></div>
+      <div id="statusText">正在搜索…</div>
+      <div id="hint" class="hint"></div>
+    </div>
+    <ul id="list" class="list hidden"></ul>
+  </main>
+
+  <!-- 文件选择对话框（迅雷：确认时才创建任务，取消无需清理） -->
+  <section id="dlg" class="dlg hidden">
+    <div class="dlg-head">
+      <span class="dlg-title">选择要下载的文件</span>
+      <button id="dlgClose" class="dlg-close" title="取消并返回">✕</button>
+    </div>
+    <div id="dlgWait" class="dlg-wait">
+      <div class="spinner"></div>
+      <div id="dlgWaitText">正在解析磁力文件列表…</div>
+      <div class="hint">迅雷云端解析，热门资源秒出；确认后才会创建任务</div>
+      <button id="dlgWaitCancel" class="btn btn-ghost">取消</button>
+    </div>
+    <div id="dlgBody" class="hidden">
+      <div class="dlg-toolbar">
+        <label class="dlg-all"><input type="checkbox" id="dlgAll" checked> 全选</label>
+        <span id="dlgSelInfo" class="dlg-selinfo"></span>
+      </div>
+      <ul id="dlgFiles" class="dlg-files"></ul>
+      <div class="dlg-actions">
+        <button id="dlgConfirm" class="btn btn-primary">确认下载</button>
+        <button id="dlgCancel" class="btn btn-ghost">取消</button>
+      </div>
+    </div>
+  </section>
+
+  <script src="config.js"></script>
+  <script src="xlauth.js"></script>
+  <script src="xunlei.js"></script>
+  <script src="core.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

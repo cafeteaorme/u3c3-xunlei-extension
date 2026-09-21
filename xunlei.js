@@ -122,7 +122,7 @@
       name: t.name || hash,
       state: t.state || 'active',
       seen: !!t.seen,
-      statusText: t.error ? '错误' : (PHASE_TEXT[t.phase] || '下载中'),
+      statusText: t.error ? '错误' : (t.state === 'completed' ? '已完成' : (PHASE_TEXT[t.phase] || '下载中')),
       plan: Math.min(100, Math.max(0, t.progress || 0)),
       speedText: t.state === 'active' && t.speed > 0 ? humanSize(t.speed) + '/s' : '',
       sizeText: t.total ? humanSize(t.done) + '/' + humanSize(t.total) : (t.sizeText || '')
@@ -276,6 +276,22 @@
     return (d && d.tasks) || [];
   }
 
+  // 全量任务：默认列表 + 完成态过滤（任务完成后可能移出默认视图）
+  async function listTasksAll(target) {
+    const main = await listTasks(target).catch(() => []);
+    const seen = new Set(main.map(t => t.id));
+    const filters = JSON.stringify({
+      type: { in: 'user#download-url,user#download' },
+      phase: { in: 'PHASE_TYPE_COMPLETE' }
+    });
+    let done = [];
+    try {
+      const d = await api('GET', '/drive/v1/tasks', { params: { filters: filters, space: target } });
+      done = (d && d.tasks) || [];
+    } catch (_) { /* 完成态查询失败不影响主列表 */ }
+    return main.concat(done.filter(t => !seen.has(t.id)));
+  }
+
   async function pauseTask(id, space) {
     return api('POST', '/method/patch/drive/v1/task', {
       json: { id: id, space: space, type: 'user#download-url', set_params: { spec: '{"phase":"pause"}' } }
@@ -299,29 +315,34 @@
     let tasks = [];
     try {
       const target = await getTarget();
-      tasks = await listTasks(target);
+      tasks = await listTasksAll(target);
     } catch (e) {
       if (e.code === 'LOGIN') throw e;   // 未登录：向上抛给角标逻辑清空
       tasks = [];
     }
 
-    const byHash = {};
+    // info_hash 要等磁力元数据解析后才出现，匹配用 hash + name 双保险
+    const byHash = {}, byName = {};
     for (const t of tasks) {
       const h = t.params && t.params.info_hash;
       if (h) byHash[String(h).toLowerCase()] = t;
+      if (t.name) byName[t.name] = t;
     }
     for (const hash of hashes) {
       const t = reg[hash];
-      const task = byHash[hash];
+      const task = byHash[hash] || (t.name && byName[t.name]) || null;
       if (task) {
-        t.state = task.phase === 'PHASE_TYPE_COMPLETE' ? 'completed' : 'active';
-        if (t.state === 'completed' && t.phase !== task.phase) t.seen = false;
+        const progress = Number(task.progress) || 0;
+        const finished = task.phase === 'PHASE_TYPE_COMPLETE' || progress >= 100;
+        const prevState = t.state;
+        t.state = finished ? 'completed' : 'active';
+        if (t.state === 'completed' && prevState !== 'completed') t.seen = false;
         t.phase = task.phase;
         t.name = task.name || t.name;
-        t.progress = Number(task.progress) || 0;
+        t.progress = progress;
         t.speed = Number(task.params && task.params.speed) || 0;
         t.total = Number(task.file_size) || t.total || 0;
-        t.done = Math.floor((Number(task.progress) || 0) / 100 * (t.total || 0));
+        t.done = Math.floor(progress / 100 * (t.total || 0));
         t.taskId = task.id;
         t.error = task.phase === 'PHASE_TYPE_ERROR';
         if (t.state === 'completed') t.completedAt = t.completedAt || Date.now();
@@ -366,6 +387,7 @@
     parseMagnet: parseMagnet,
     addTask: addTask,
     listTasks: listTasks,
+    listTasksAll: listTasksAll,
     pauseTask: pauseTask,
     deleteTask: deleteTask,
     getRegistry: getRegistry,

@@ -86,7 +86,7 @@
   }
 
   // 选中文件索引（升序）→ sub_file_index 串
-  // 单文件 '--1,'；多文件压缩连续段 '0-2,5-5,'（尾随逗号）
+  // 单文件 '--1,'；多文件压缩连续段 '0-2,5-5,'（单点也写区间形式，尾随逗号）
   function buildSubFileIndex(fileCount, indexes) {
     if (fileCount <= 1) return '--1,';
     const sorted = [...new Set(indexes)].sort((a, b) => a - b);
@@ -96,7 +96,7 @@
     for (let i = 1; i <= sorted.length; i++) {
       const cur = sorted[i];
       if (cur !== prev + 1) {
-        parts.push(start === prev ? String(start) : start + '-' + prev);
+        parts.push(start + '-' + prev);
         start = cur;
       }
       prev = cur;
@@ -186,6 +186,8 @@
     return token;
   }
 
+  let cookieJar = '';   // Node 手工 cookie；浏览器走 credentials:'include' 自动管理
+
   async function api(method, path, { params, json } = {}, retried) {
     const token = await getToken();
     const url = new URL(CFG.XL_BASE + CFG.XL_CGI + path);
@@ -195,8 +197,14 @@
     const opts = {
       method,
       cache: 'no-store',
-      headers: { 'pan-auth': token, 'Content-Type': 'application/json;charset=UTF-8' }
+      credentials: 'include',   // 浏览器：自动携带/存储 xtoken cookie
+      headers: {
+        'pan-auth': token,
+        'Content-Type': 'application/json;charset=UTF-8',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      }
     };
+    if (cookieJar) opts.headers['Cookie'] = cookieJar;   // Node：手工 jar
     if (json !== undefined) opts.body = JSON.stringify(json);
     let res;
     try {
@@ -204,14 +212,22 @@
     } catch (e) {
       throw new XlError('无法连接迅雷容器（' + (e.message || '网络错误') + '）', 'NETWORK');
     }
+    const setCookie = res.headers && res.headers.get && res.headers.get('set-cookie');
+    if (setCookie) {   // Node 可读到；浏览器为 null（自动处理）
+      const m = String(setCookie).match(/xtoken=([^;]+)/);
+      if (m) cookieJar = 'xtoken=' + m[1];
+    }
     let body = null;
     try { body = await res.json(); } catch (_) { /* 容错 */ }
-    if (res.status === 401 || (body && body.error && /auth/i.test(String(body.error)))) {
+    if (body && body.error === 'unauthenticated') {
+      throw new XlError('迅雷账号未登录：请先打开 ' + CFG.XL_BASE + ' 扫码登录迅雷账号', 'LOGIN');
+    }
+    if (res.status === 401 || res.status === 402) {
       if (!retried) {
         await getToken(true);
         return api(method, path, { params, json }, true);
       }
-      throw new XlError('pan-auth 被拒绝', 'AUTH');
+      throw new XlError('迅雷鉴权失败（' + JSON.stringify(body || '').slice(0, 120) + '）', 'AUTH');
     }
     if (!res.ok) {
       throw new XlError('HTTP ' + res.status + ' ' + JSON.stringify(body || '').slice(0, 120), res.status);

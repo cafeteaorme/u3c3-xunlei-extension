@@ -56,28 +56,33 @@ console.log('  选择文件 index:', wantIdx.join(','), '→ sub_file_index:', s
 await XL.addTask(meta, sub, target);
 ok(true, 'addTask 已提交');
 
-// 6. 等任务出现并同步
+// 6. 等任务出现（info_hash 要等元数据解析，name 先兜底；优先取 sub_file_index 匹配的那个）
 let task = null;
 for (let i = 0; i < 20 && !task; i++) {
   await sleep(1500);
-  const tasks = await XL.listTasks(target).catch(() => []);
-  task = tasks.find(t => t.params && String(t.params.info_hash || '').toLowerCase() === HASH);
+  const tasks = await XL.listTasksAll(target).catch(() => []);
+  const byHash = tasks.filter(t => t.params && String(t.params.info_hash || '').toLowerCase() === HASH);
+  if (byHash.length) { task = byHash[0]; continue; }
+  const bySub = tasks.filter(t => t.name === meta.name && t.params && t.params.sub_file_index === sub);
+  if (bySub.length) task = bySub[0];
 }
-ok(!!task, '任务列表按 info_hash 找到任务', task ? `${task.name} · phase=${task.phase} · progress=${task.progress}` : '');
+ok(!!task, '任务列表找到任务（hash 或 name）', task ? `${task.name} · phase=${task.phase} · progress=${task.progress}` : '');
 ok(task && task.params && task.params.sub_file_index === sub,
   'sub_file_index 生效（只下选中文件）', task && task.params ? '实际=' + task.params.sub_file_index : '');
 
-// 7. syncTasks 注册表同步
+// 7. syncTasks 注册表同步（VIP 加速下任务可能已 100%——完成态也算跟踪成功）
 const view = await XL.syncTasks();
-ok(view.activeCount >= 1, 'syncTasks 活动计数', `active=${view.activeCount}`);
-ok(view.items.some(i => i.hash === HASH && i.state === 'active'), '注册表视图包含新任务');
+const entry = view.items.find(i => i.hash === HASH);
+ok(view.items.length >= 1 && !!entry, 'syncTasks 注册表视图包含新任务',
+  entry ? entry.state + ' ' + entry.statusText : '');
 
-// 8. 清理：删除任务 + 注册表
+// 8. 清理：删除任务（含探测期间遗留的同名任务）+ 注册表
 if (task) {
   await XL.deleteTask(task.id, target);
   await sleep(2500);
-  const tasks2 = await XL.listTasks(target).catch(() => []);
-  ok(!tasks2.some(t => String(t.params && t.params.info_hash || '').toLowerCase() === HASH), 'deleteTask 清理完成');
+  const tasks2 = await XL.listTasksAll(target).catch(() => []);
+  ok(!tasks2.some(t => String(t.params && t.params.info_hash || '').toLowerCase() === HASH || t.name === meta.name),
+    'deleteTask 清理完成');
 }
 {
   const reg = await XL.getRegistry();

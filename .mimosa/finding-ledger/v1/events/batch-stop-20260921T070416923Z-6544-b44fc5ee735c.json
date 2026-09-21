@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "mimosa-finding-ledger-batch/v1",
+  "batchId": "stop-20260921T070416923Z-6544-b44fc5ee735c",
+  "runId": "20260921T070416923Z-6544-b44fc5ee735c",
+  "runStatus": "completed",
+  "coverage": {
+    "status": "complete",
+    "reasons": []
+  },
+  "source": {
+    "component": "zcode-hook",
+    "operationId": "Stop"
+  },
+  "revision": "dcab783c67a5ecd6a8c2fd1aa73d450983b24491",
+  "diffHash": "4ec724538795bd5208b76791805d8ac0fba562791a1c1356f6a49381d3870dfd",
+  "rulesVersion": "unavailable",
+  "sessionHash": "a67edc5447c4c5ff95487f0573c002334a2e959faee096a6efba9c64d5f13364",
+  "reportRef": ".mimosa/reports/task-review-sess_f6a9c611-a274-4b96-82d6-a28f437d05e6-20260921T070416923Z-6544-b44fc5ee735c.json",
+  "events": [],
+  "observedFindingIds": [],
+  "verifiedFiles": [
+    {
+      "file": "xunlei.js",
+      "direct": "complete",
+      "projectContext": "partial"
+    }
+  ],
+  "recordedAt": "2026-09-21T07:04:17.114Z"
+}

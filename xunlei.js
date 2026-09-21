@@ -114,14 +114,13 @@
 
   function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-  // 注册表 → 弹窗状态区视图（结构同 UGOS 版 nas.js）
+  // 注册表 → 弹窗状态区视图（完成项常驻，点击条目由 popup 触发 dismissEntry 清除）
   function buildStatusView(reg) {
     const items = Object.entries(reg || {}).map(([hash, t]) => ({
       hash,
       addedAt: t.addedAt || 0,
       name: t.name || hash,
       state: t.state || 'active',
-      seen: !!t.seen,
       statusText: t.error ? '错误' : (t.state === 'completed' ? '已完成' : (PHASE_TEXT[t.phase] || '下载中')),
       plan: Math.min(100, Math.max(0, t.progress || 0)),
       speedText: t.state === 'active' && t.speed > 0 ? humanSize(t.speed) + '/s' : '',
@@ -131,22 +130,34 @@
     return items;
   }
 
+  // 角标：有已完成（未点击清除）→ 橙色 ok；否则进行中数量；无 → 清除
   function badgeFrom(view) {
-    const unseen = view.filter(i => i.state === 'completed' && !i.seen).length;
-    if (unseen > 0) return { text: 'ok', color: '#e8590c' };  // 迅雷版用橙色 ok
+    const done = view.filter(i => i.state === 'completed').length;
+    if (done > 0) return { text: 'ok', color: '#e8590c' };
     const active = view.filter(i => i.state === 'active').length;
     if (active > 0) return { text: String(active), color: '#e8590c' };
     return { text: '', color: null };
   }
 
+  // 只清理「NAS 上已不存在」的条目；已完成项保留至用户点击清除
   function pruneRegistry(reg) {
     const out = {};
     for (const [hash, t] of Object.entries(reg || {})) {
-      if (t.state === 'completed' && t.seen) continue;
       if (t.state === 'gone') continue;
       out[hash] = t;
     }
     return out;
+  }
+
+  // 点击完成项 → 从注册表删除（显示清除，ok 角标随之消减）
+  async function dismissEntry(hash) {
+    const reg = await getRegistry();
+    if (reg[hash]) {
+      delete reg[hash];
+      await saveRegistry(reg);
+      return true;
+    }
+    return false;
   }
 
   // ———————————————— IO（浏览器专用） ————————————————
@@ -302,6 +313,30 @@
     return api('POST', '/method/delete/drive/v1/tasks', { params: { space: space, task_ids: id }, json: {} });
   }
 
+  // 完整设备信息（内测门槛/每日限额判断用）
+  async function getDevice() {
+    return api('GET', '/device/info');
+  }
+
+  // 每日免费任务限额是否已用完（非内测账号每日 3 个；纯函数可测）
+  function isQuotaExhausted(deviceInfo) {
+    const lim = deviceInfo && deviceInfo.task_daily_limit;
+    return !!(lim && lim.title && String(lim.title).indexOf('已用完') !== -1);
+  }
+
+  // 等待任务出现在列表（hash 优先，name 兜底）；出现则返回任务行
+  async function waitForTask(hash, name, target, timeoutMs) {
+    const deadline = Date.now() + (timeoutMs || 9000);
+    while (Date.now() < deadline) {
+      const tasks = await listTasksAll(target).catch(() => []);
+      const hit = tasks.find(t => t.params && String(t.params.info_hash || '').toLowerCase() === hash)
+        || tasks.find(t => t.name === name);
+      if (hit) return hit;
+      await sleep(1500);
+    }
+    return null;
+  }
+
   // ———————————————— 任务注册表 + 同步 ————————————————
 
   async function getRegistry() { return storageGet(REG_KEY, {}); }
@@ -330,13 +365,12 @@
     }
     for (const hash of hashes) {
       const t = reg[hash];
+      if (t.state === 'completed') continue;   // 完成项不再回查，等用户点击清除
       const task = byHash[hash] || (t.name && byName[t.name]) || null;
       if (task) {
         const progress = Number(task.progress) || 0;
         const finished = task.phase === 'PHASE_TYPE_COMPLETE' || progress >= 100;
-        const prevState = t.state;
         t.state = finished ? 'completed' : 'active';
-        if (t.state === 'completed' && prevState !== 'completed') t.seen = false;
         t.phase = task.phase;
         t.name = task.name || t.name;
         t.progress = progress;
@@ -345,28 +379,18 @@
         t.done = Math.floor(progress / 100 * (t.total || 0));
         t.taskId = task.id;
         t.error = task.phase === 'PHASE_TYPE_ERROR';
-        if (t.state === 'completed') t.completedAt = t.completedAt || Date.now();
-      } else if (t.state !== 'completed') {
+        if (t.state === 'completed') { t.completedAt = Date.now(); t.total = t.total || task.file_size; }
+      } else {
         t.state = 'gone';
       }
     }
     await saveRegistry(reg);
-    const items = buildStatusView(reg);
+    const items = buildStatusView(pruneRegistry(reg));
     return {
       items: items,
       activeCount: items.filter(i => i.state === 'active').length,
-      completedUnseen: items.filter(i => i.state === 'completed' && !i.seen).length
+      completedUnseen: items.filter(i => i.state === 'completed').length
     };
-  }
-
-  async function markCompletedSeen() {
-    const reg = await getRegistry();
-    let changed = false;
-    for (const t of Object.values(reg)) {
-      if (t.state === 'completed' && !t.seen) { t.seen = true; changed = true; }
-    }
-    if (changed) await saveRegistry(reg);
-    return changed;
   }
 
   const api_all = {
@@ -382,18 +406,21 @@
     buildStatusView: buildStatusView,
     badgeFrom: badgeFrom,
     pruneRegistry: pruneRegistry,
+    dismissEntry: dismissEntry,
     getToken: getToken,
     getTarget: getTarget,
     parseMagnet: parseMagnet,
     addTask: addTask,
     listTasks: listTasks,
     listTasksAll: listTasksAll,
+    getDevice: getDevice,
+    isQuotaExhausted: isQuotaExhausted,
+    waitForTask: waitForTask,
     pauseTask: pauseTask,
     deleteTask: deleteTask,
     getRegistry: getRegistry,
     saveRegistry: saveRegistry,
-    syncTasks: syncTasks,
-    markCompletedSeen: markCompletedSeen
+    syncTasks: syncTasks
   };
 
   global.U3C3XL = api_all;

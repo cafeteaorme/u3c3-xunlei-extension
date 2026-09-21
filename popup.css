@@ -95,6 +95,15 @@ header {
 .dl-item.st-active .dl-dot { background: #f5a623; }
 .dl-item.st-completed{ border-left-color: #34d399; background: #14201a; }
 .dl-item.st-completed .dl-dot { background: #34d399; }
+.dl-item.st-completed { cursor: pointer; }
+.dl-item.st-completed:hover { background: #1a2c23; }
+.dl-item.st-completed:hover::after {
+  content: '✕ 点击清除';
+  flex: none;
+  font-size: 10px;
+  color: #6ee7b7;
+  opacity: .8;
+}
 .dl-item.st-error    { border-left-color: #f4574d; background: #211516; }
 .dl-item.st-error .dl-dot { background: #f4574d; }
 .dl-name {

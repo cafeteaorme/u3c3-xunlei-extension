@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "u3c3 搜索·迅雷版",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "读取当前标签页标题中的番号，在 u3c3.com 搜索；点击结果复制 Magnet，勾选文件后直接发送到 NAS 迅雷（超级会员加速）下载。",
   "permissions": ["activeTab", "clipboardWrite", "storage", "alarms"],
   "host_permissions": [

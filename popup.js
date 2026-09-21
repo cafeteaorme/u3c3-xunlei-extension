@@ -33,10 +33,19 @@
       items = XL.buildStatusView(await XL.getRegistry());
     }
     drawStatus(items, err ? (err.code === 'LOGIN' ? '迅雷未登录' : '迅雷连接失败') : '');
-    await XL.markCompletedSeen();
     try {
       chrome.runtime.sendMessage({ type: 'refreshBadge' }, () => void chrome.runtime.lastError);
     } catch (_) { /* ignore */ }
+  }
+
+  // 点击完成项 → 清除该条目（显示清除 + ok 角标消减）
+  async function dismissEntry(hash) {
+    if (await XL.dismissEntry(hash)) {
+      await renderStatusArea();
+      try {
+        chrome.runtime.sendMessage({ type: 'refreshBadge' }, () => void chrome.runtime.lastError);
+      } catch (_) { /* ignore */ }
+    }
   }
 
   function drawStatus(items, metaOverride) {
@@ -53,6 +62,10 @@
       const li = document.createElement('li');
       li.className = 'dl-item ' + (it.state === 'completed' ? 'st-completed'
         : (it.statusText === '错误' ? 'st-error' : 'st-active'));
+      if (it.state === 'completed') {
+        li.title = '点击清除该条目';
+        li.addEventListener('click', () => dismissEntry(it.hash));
+      }
       const dot = document.createElement('span');
       dot.className = 'dl-dot';
       const name = document.createElement('span');
@@ -283,6 +296,20 @@
       const sub = XL.buildSubFileIndex(dlg.meta.file_count, checked);
       const target = await XL.getTarget();
       await XL.addTask(dlg.meta, sub, target);
+
+      // 落实验证：addTask 云端受理 ≠ 真执行（每日免费限额用尽时任务被静默丢弃）
+      btn.textContent = '正在确认任务…';
+      const appeared = await XL.waitForTask(dlg.hash, dlg.meta.name, target, 9000);
+      if (!appeared) {
+        let quota = false;
+        try { quota = XL.isQuotaExhausted(await XL.getDevice()); } catch (_) {}
+        throw Object.assign(
+          new Error(quota
+            ? '今日免费下载任务数已用完（非内测账号每日 3 个），任务未被迅雷执行。内测资格申请：迅雷内测 QQ 群 772445453，或等明日额度刷新'
+            : '任务提交后未出现在迅雷列表，请到 ' + CFG.XL_BASE + ' 面板查看'),
+          { code: quota ? 'QUOTA' : 'NOTASK' });
+      }
+
       // 注册进状态区（按 infohash，任务列表同步时精确匹配）
       const reg = await XL.getRegistry();
       if (dlg.hash) {

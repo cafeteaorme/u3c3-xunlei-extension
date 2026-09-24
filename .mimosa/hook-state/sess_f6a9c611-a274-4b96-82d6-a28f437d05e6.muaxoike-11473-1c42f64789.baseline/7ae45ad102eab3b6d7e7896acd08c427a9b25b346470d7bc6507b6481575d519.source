@@ -1,6 +1,0 @@
-{
-  "name": "u3c3-xunlei",
-  "private": true,
-  "type": "commonjs",
-  "description": "仅用于让 Node 把 .js 当 CommonJS 解析（上层目录 package.json 声明了 type: module）；Chrome 加载插件时不读取此文件。"
-}

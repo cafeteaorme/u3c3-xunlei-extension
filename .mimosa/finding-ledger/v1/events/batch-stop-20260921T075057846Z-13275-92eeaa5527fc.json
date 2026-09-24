@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "mimosa-finding-ledger-batch/v1",
+  "batchId": "stop-20260921T075057846Z-13275-92eeaa5527fc",
+  "runId": "20260921T075057846Z-13275-92eeaa5527fc",
+  "runStatus": "completed",
+  "coverage": {
+    "status": "complete",
+    "reasons": []
+  },
+  "source": {
+    "component": "zcode-hook",
+    "operationId": "Stop"
+  },
+  "revision": "f0f988bd35f2d9b9fd2665407d2a99a0aec929a7",
+  "diffHash": "164aa8d0c5b54291eede341d882cb6336b0994c3e2128740cbd704669a74bce7",
+  "rulesVersion": "unavailable",
+  "sessionHash": "a67edc5447c4c5ff95487f0573c002334a2e959faee096a6efba9c64d5f13364",
+  "reportRef": ".mimosa/reports/task-review-sess_f6a9c611-a274-4b96-82d6-a28f437d05e6-20260921T075057846Z-13275-92eeaa5527fc.json",
+  "events": [],
+  "observedFindingIds": [],
+  "verifiedFiles": [
+    {
+      "file": "xunlei.js",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "popup.js",
+      "direct": "complete",
+      "projectContext": "partial"
+    }
+  ],
+  "recordedAt": "2026-09-21T07:50:58.040Z"
+}

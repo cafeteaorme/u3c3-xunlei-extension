@@ -86,13 +86,22 @@
     return s.trim();
   }
 
-  // 相关性校验：忽略空格/连杠/下划线/点/@/波浪线后做包含匹配
+  // 相关性校验：忽略空格/连杠/下划线/点/@/波浪线/各类括号后做包含匹配
+  //（括号剥离让「【FC2PPV】4744486」这类前缀与数字被隔开的写法也能命中）
   function normKey(s) {
-    return String(s).replace(/[\s\-_.@～~]/g, '').toUpperCase();
+    return String(s).replace(/[\s\-_.@～~【】\[\]（）()「」『』]/g, '').toUpperCase();
   }
 
+  // FC2 番号放宽：前缀写法不限（FC2PPV-4744486 / FC2 4744486 / fc2-ppv… 均命中），
+  // 但必须带 FC2 前缀且数字串完整（防 300MIUM4744486 这类误报）
   function matchesCode(title, code) {
     if (!code) return true;
+    if (code.indexOf('FC2PPV ') === 0) {
+      const id = code.slice(7);
+      if (!/^\d+$/.test(id)) return false;
+      const nt = normKey(title);
+      return nt.indexOf('FC2PPV' + id) !== -1 || nt.indexOf('FC2' + id) !== -1;
+    }
     return normKey(title).indexOf(normKey(code)) !== -1;
   }
 
@@ -154,20 +163,44 @@
     }
   }
 
-  // 完整搜索流程：首页取最新 token → 搜索 → 若"有结果行但都不匹配"
-  //（token 刚被轮换的降级页）→ 从降级页提取新 token 重试一次
+  // —— 查询变体：u3c3 服务端按字面子串匹配，不同写法召回不同 ——
+  // FC2PPV 4744486 → 只查数字（召回全集，客户端过滤收口）
+  // ABF-385 → 补查 ABF385；091726-001 → 补查 091726_001
+  function queryVariants(code) {
+    if (code.indexOf('FC2PPV ') === 0) return [code.slice(7)];
+    let m = code.match(/^([A-Z]+)-(\d+)$/);
+    if (m && m[2].length <= 5) return [code, m[1] + m[2]];
+    m = code.match(/^(\d{6,8})-(\d{3})$/);
+    if (m) return [code, m[1] + '_' + m[2]];
+    return [code];
+  }
+
+  // 完整搜索流程：首页取最新 token → 逐个查变体并合并去重 →
+  // 若"有结果行但都不匹配"（token 刚被轮换的降级页）→ 换新 token 重试
   async function searchCode(code) {
     const token = extractToken(await fetchText(HOME_URL)) || FALLBACK_TOKEN;
-    let page = await fetchText(searchUrl(token, code));
-    let parsed = parsePage(page, code);
-    if (!parsed.items.length && parsed.realRows > 0) {
-      const fresh = extractToken(page);
-      if (fresh && fresh !== token) {
-        page = await fetchText(searchUrl(fresh, code));
-        parsed = parsePage(page, code);
+    let items = [];
+    const seen = new Set();
+    let hitVariant = false, anyRealRows = false, lastPage = '';
+    for (const q of queryVariants(code)) {
+      lastPage = await fetchText(searchUrl(token, q));
+      const parsed = parsePage(lastPage, code);
+      if (parsed.realRows > 0) anyRealRows = true;
+      if (parsed.items.length) hitVariant = true;
+      for (const it of parsed.items) {
+        if (!seen.has(it.hash)) { seen.add(it.hash); items.push(it); }
       }
     }
-    return parsed.items;
+    if (!hitVariant && anyRealRows) {
+      // 全部变体都零命中但页面有真实行：疑似 token 过期的降级页，
+      // 用降级页内的新 token 重查首个变体
+      const fresh = extractToken(lastPage);
+      if (fresh && fresh !== token) {
+        const parsed = parsePage(await fetchText(searchUrl(fresh, queryVariants(code)[0])), code);
+        if (parsed.items.length) return parsed.items;
+      }
+    }
+    return items;
   }
 
   const api = {
@@ -181,6 +214,7 @@
     parseResults: parseResults,
     fetchText: fetchText,
     searchCode: searchCode,
+    queryVariants: queryVariants,
     cleanTitle: cleanTitle,
     matchesCode: matchesCode,
     decodeEntities: decodeEntities

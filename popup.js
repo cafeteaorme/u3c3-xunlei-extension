@@ -11,6 +11,8 @@
   // ———————————————— 启动 ————————————————
   async function boot() {
     bindDialog();
+    $('panelLink').href = CFG.XL_BASE;   // NAS 迅雷网页版快捷入口
+    $('panelLink').target = '_blank';
     await renderStatusArea();
     refreshStatus();
     runSearch();

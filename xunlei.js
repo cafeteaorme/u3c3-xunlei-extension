@@ -114,6 +114,16 @@
 
   function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+  // —— 文件选择默认勾选规则：超过 200MB 的视频文件，其余不勾 ——
+  const VIDEO_EXT_RE = /\.(mp4|mkv|avi|wmv|mov|flv|ts|m2ts|webm|mpg|mpeg|rmvb|rm|3gp|m4v|vob|ogv|wtv)$/i;
+  const AUTO_SELECT_MIN_BYTES = 200 * 1024 * 1024;
+
+  function autoSelectFile(file) {
+    const name = String((file && (file.name || file.file_name || file.path)) || '');
+    const size = Number((file && (file.size != null ? file.size : file.file_size))) || 0;
+    return VIDEO_EXT_RE.test(name) && size > AUTO_SELECT_MIN_BYTES;
+  }
+
   // 注册表 → 弹窗状态区视图（完成项常驻，点击条目由 popup 触发 dismissEntry 清除）
   function buildStatusView(reg) {
     const items = Object.entries(reg || {}).map(([hash, t]) => ({
@@ -402,6 +412,8 @@
     resourceMeta: resourceMeta,
     buildSubFileIndex: buildSubFileIndex,
     humanSize: humanSize,
+    autoSelectFile: autoSelectFile,
+    AUTO_SELECT_MIN_BYTES: AUTO_SELECT_MIN_BYTES,
     sleep: sleep,
     buildStatusView: buildStatusView,
     badgeFrom: badgeFrom,

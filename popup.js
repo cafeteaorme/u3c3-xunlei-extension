@@ -255,7 +255,7 @@
       li.className = 'dlg-file';
       const cb = document.createElement('input');
       cb.type = 'checkbox';
-      cb.checked = true;
+      cb.checked = XL.autoSelectFile(f);   // 默认只勾 >200MB 的视频
       cb.dataset.index = String(f.file_index);
       cb.addEventListener('change', () => { $('dlgAll').checked = false; updateSelInfo(); });
       const name = document.createElement('span');
@@ -271,7 +271,7 @@
       li.append(cb, name, size);
       ul.appendChild(li);
     }
-    $('dlgAll').checked = true;
+    $('dlgAll').checked = files.length > 0 && files.every(f => XL.autoSelectFile(f));
     updateSelInfo();
   }
 
@@ -294,6 +294,9 @@
       const checked = [];
       for (const cb of $('dlgFiles').querySelectorAll('input[type=checkbox]')) {
         if (cb.checked) checked.push(Number(cb.dataset.index));
+      }
+      if (!checked.length && dlg.meta.file_count > 1) {
+        throw new Error('未选择任何文件，请至少勾选一个（默认只勾选 >200MB 的视频）');
       }
       const sub = XL.buildSubFileIndex(dlg.meta.file_count, checked);
       const target = await XL.getTarget();

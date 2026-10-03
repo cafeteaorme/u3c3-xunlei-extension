@@ -129,6 +129,19 @@ eq(XL.isQuotaExhausted({ task_daily_limit: { title: '今日剩余 2 个免费下
 eq(XL.isQuotaExhausted({}), false, '无字段 → false');
 eq(XL.isQuotaExhausted(null), false, 'null 安全');
 
+console.log('autoSelectFile（默认只勾 >200MB 视频）:');
+const MB = 1024 * 1024;
+ok(XL.autoSelectFile({ name: 'movie.mp4', size: 201 * MB }), '201MB mp4 → 勾');
+ok(!XL.autoSelectFile({ name: 'movie.mp4', size: 200 * MB }), '恰好 200MB（不超额）→ 不勾');
+ok(!XL.autoSelectFile({ name: 'movie.mp4', size: 199 * MB }), '199MB mp4 → 不勾');
+ok(XL.autoSelectFile({ name: 'CLIP.MKV', size: 500 * MB }), '大写扩展名 → 勾');
+ok(!XL.autoSelectFile({ name: 'sub.srt', size: 300 * MB }), '非视频大文件 → 不勾');
+ok(!XL.autoSelectFile({ name: 'poster.jpg', size: 1 * MB }), '图片 → 不勾');
+ok(!XL.autoSelectFile({ name: 'noext-largefile', size: 900 * MB }), '无扩展名 → 不勾');
+ok(XL.autoSelectFile({ file_name: 'anime.ts', file_size: 250 * MB }), 'UGOS 字段形态（file_name/file_size）→ 勾');
+ok(!XL.autoSelectFile(null), 'null 安全');
+ok(!XL.autoSelectFile({ name: 'a.mp4' }), '缺 size → 不勾');
+
 console.log('humanSize:');
 eq(XL.humanSize(0), '0B', '0 → 0B');
 eq(XL.humanSize(129302391), '123.3MB', 'MB 换算');

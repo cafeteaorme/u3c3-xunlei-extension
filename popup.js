@@ -8,14 +8,18 @@
 
   document.addEventListener('DOMContentLoaded', boot);
 
-  // ———————————————— 缓存：读写、命中展示、清除 ————————————————
-  const CACHE_TTL = 7 * 24 * 60 * 60 * 1000;   // 7 天过期
-
+  // ———————————————— 缓存：读写、命中展示、清除（永久存储，仅手动清除） ————————————————
   function getCache() {
     try { return chrome.storage.local.get('u3c3_cache'); } catch (_) { return Promise.resolve({}); }
   }
-  function saveCache(code, items) {
-    try { chrome.storage.local.set({ u3c3_cache: { ...(chrome.storage.local.u3c3_cache || {}), [code]: { items, cachedAt: Date.now() } } }); } catch (_) { /* ignore */ }
+  // ⚠ chrome.storage.local 不是内存对象，不能直接读 .u3c3_cache 属性（恒 undefined）；
+  // 必须先读出、合并、再写回，否则每次保存会覆盖之前存的所有号数
+  async function saveCache(code, items) {
+    try {
+      const cur = (await getCache()).u3c3_cache || {};
+      cur[code] = { items, cachedAt: Date.now() };
+      await chrome.storage.local.set({ u3c3_cache: cur });
+    } catch (_) { /* ignore */ }
   }
   function clearCache() {
     try { chrome.storage.local.set({ u3c3_cache: {} }); } catch (_) { /* ignore */ }
@@ -68,10 +72,58 @@
     });
   }
 
+  // ———————————————— 已下载标记（永久，按番号存 dl_marks） ————————————————
+  let currentCode = null;    // 当前搜索番号
+  let sourceTabId = null;    // 打开弹窗时的活跃标签页（下载确认后关闭）
+
+  async function getDlMarks() {
+    try { return (await chrome.storage.local.get('dl_marks')).dl_marks || {}; } catch (_) { return {}; }
+  }
+  function showDlBanner(code, at, name) {
+    const banner = $('dlBanner');
+    banner.dataset.code = code;
+    $('dlHint').textContent = formatTimeAgo(at) + ' 下载过' + (name ? '：' + name : '');
+    $('dlHint').title = name || '';
+    banner.classList.remove('hidden');
+  }
+  function hideDlBanner() { $('dlBanner').classList.add('hidden'); }
+
+  // 下载提交成功 → 该番号标记已下载（永久）并当场点亮横幅
+  async function markDownloaded(code, name) {
+    if (!code) return;
+    try {
+      const marks = await getDlMarks();
+      marks[code] = { at: Date.now(), name: name || '' };
+      await chrome.storage.local.set({ dl_marks: marks });
+      showDlBanner(code, marks[code].at, marks[code].name);
+    } catch (_) { /* ignore */ }
+  }
+
+  function bindDlBanner() {
+    $('dlClear').addEventListener('click', async () => {
+      const code = $('dlBanner').dataset.code;
+      if (!code) return;
+      const marks = await getDlMarks();
+      if (marks[code]) {
+        delete marks[code];
+        try { await chrome.storage.local.set({ dl_marks: marks }); } catch (_) { /* ignore */ }
+      }
+      hideDlBanner();
+    });
+  }
+
+  // 确认开始下载后：关闭提供标题的网页标签页（弹窗保留，可看状态区与标记）
+  function closeSourceTab() {
+    if (sourceTabId == null) return;
+    try { chrome.tabs.remove(sourceTabId, () => void chrome.runtime.lastError); } catch (_) { /* ignore */ }
+    sourceTabId = null;
+  }
+
   // ———————————————— 启动 ————————————————
   async function boot() {
     bindDialog();
     bindClearCache();
+    bindDlBanner();
     bindModeToggle();
     $('panelLink').href = CFG.XL_BASE;   // NAS 迅雷网页版快捷入口
     $('panelLink').target = '_blank';
@@ -174,29 +226,33 @@
     }
   }
 
-  // ———————————————— 搜索（同 UGOS 版，增加缓存） ————————————————
+  // ———————————————— 搜索（同 UGOS 版，缓存与标记均永久） ————————————————
   async function runSearch() {
     hideCacheBanner();
+    hideDlBanner();
     showStatus('正在搜索…', '', true);
     let tab = null;
     try { [tab] = await chrome.tabs.query({ active: true, currentWindow: true }); } catch (_) {}
+    sourceTabId = tab && tab.id != null ? tab.id : null;
     const title = tab && tab.title ? tab.title : '';
 
     const code = U3C3.extractCode(title);
     if (!code) return showStatus('无搜索结果', title ? '' : '无法读取当前标签页标题', false);
+    currentCode = code;
 
     $('query').textContent = code;
     $('query').title = '页面标题：' + title;
 
-    // 先查缓存
+    // 已下载标记：与已搜索横幅独立并存
+    const marks = await getDlMarks();
+    if (marks[code]) showDlBanner(code, marks[code].at, marks[code].name);
+
+    // 先查缓存（永久存储，不过期）
     const cache = await getCache();
     if (cache.u3c3_cache && cache.u3c3_cache[code]) {
-      const entry = cache.u3c3_cache[code];
-      if (Date.now() - entry.cachedAt < CACHE_TTL) {
-        showCacheBanner(code, entry.cachedAt);
-        renderList(entry.items, true);   // true = 从缓存加载
-        return;
-      }
+      showCacheBanner(code, cache.u3c3_cache[code].cachedAt);
+      renderList(cache.u3c3_cache[code].items, true);   // true = 从缓存加载
+      return;
     }
 
     showStatus('正在搜索 ' + code + ' …', '', true);
@@ -212,7 +268,7 @@
                  : '',
         false);
     }
-    saveCache(code, items);   // 缓存结果
+    await saveCache(code, items);   // 缓存结果（合并写回）
     renderList(items);
   }
 
@@ -325,6 +381,8 @@
       await XL.saveRegistry(reg);
       showStatus('已提交迅雷：' + meta.name,
         chosen.length + '/' + files.length + ' 个文件 · 进度见上方状态区', false);
+      await markDownloaded(currentCode, meta.name);
+      closeSourceTab();
       refreshStatus();
     } catch (e) {
       showStatus('自动下载失败',
@@ -492,7 +550,10 @@
         };
         await XL.saveRegistry(reg);
       }
+      const taskName = dlg.meta ? dlg.meta.name : '';
       await finishDialog();
+      await markDownloaded(currentCode, taskName);
+      closeSourceTab();
       refreshStatus();
     } catch (e) {
       btn.disabled = false;

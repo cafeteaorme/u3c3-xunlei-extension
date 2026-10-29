@@ -132,6 +132,31 @@ header {
 }
 .cache-clear:hover { background: #2b2314; color: #ece8df; }
 
+/* ———— 已下载标记横幅（永久，绿色系） ———— */
+.dl-banner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 14px;
+  border-bottom: 1px solid #1e3a2c;
+  background: #14291d;
+  flex: none;
+}
+.dl-banner-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #3ecf8e;
+  letter-spacing: 1px;
+}
+#dlHint {
+  flex: 1;
+  font-size: 11px;
+  color: #6fae8c;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ———— 迅雷下载状态区 ———— */
 .dl-section {
   flex: none;

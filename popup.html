@@ -24,6 +24,13 @@
     <button id="cacheClear" class="cache-clear" title="清除当前号数的缓存">✕</button>
   </div>
 
+  <!-- 已下载标记横幅（该番号曾被插件发起下载，永久保存） -->
+  <div id="dlBanner" class="dl-banner hidden">
+    <span class="dl-banner-label">已下载</span>
+    <span id="dlHint"></span>
+    <button id="dlClear" class="cache-clear" title="清除该号数的已下载标记">✕</button>
+  </div>
+
   <!-- 迅雷下载状态区（置顶，仅插件发起的任务） -->
   <section id="dl" class="dl-section hidden">
     <div class="dl-head">

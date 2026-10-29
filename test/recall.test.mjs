@@ -21,7 +21,7 @@ function ok(cond, label) {
 
 console.log('queryVariants:');
 eq(U3C3.queryVariants('FC2PPV 4744486'), ['4744486'], 'FC2 → 纯数字查询');
-eq(U3C3.queryVariants('ABF-385'), ['ABF-385', 'ABF385'], '英数番号 → 原式+无连杠');
+eq(U3C3.queryVariants('ABF-385'), ['ABF-385', 'ABF385', 'ABF 385'], '英数番号 → 原式+无连杠+空格式');
 eq(U3C3.queryVariants('091726-001'), ['091726-001', '091726_001'], '数字编号 → 原式+下划线');
 eq(U3C3.queryVariants('奇怪格式'), ['奇怪格式'], '未知格式原样');
 
@@ -91,7 +91,7 @@ console.log('searchCode（多查询合并去重，mock 站点字面匹配）:');
   const items2 = await U3C3.searchCode('ABF-385');
   eq(items2.length, 2, 'ABF 两种写法合并去重后 2 条');
   const qs = calls.filter(u => u.includes('search=')).map(u => decodeURIComponent(u.match(/search=([^&]*)/)[1]));
-  eq(qs, ['ABF-385', 'ABF385'], '依次查询原式与无连杠变体');
+  eq(qs, ['ABF-385', 'ABF385', 'ABF 385'], '依次查询原式、无连杠、空格式三种变体');
 }
 
 console.log(failed ? `\n${failed} 个用例失败` : '\n全部通过 ✓');

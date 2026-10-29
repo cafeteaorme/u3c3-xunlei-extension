@@ -8,14 +8,103 @@
 
   document.addEventListener('DOMContentLoaded', boot);
 
+  // ———————————————— 缓存：读写、命中展示、清除 ————————————————
+  const CACHE_TTL = 7 * 24 * 60 * 60 * 1000;   // 7 天过期
+
+  function getCache() {
+    try { return chrome.storage.local.get('u3c3_cache'); } catch (_) { return Promise.resolve({}); }
+  }
+  function saveCache(code, items) {
+    try { chrome.storage.local.set({ u3c3_cache: { ...(chrome.storage.local.u3c3_cache || {}), [code]: { items, cachedAt: Date.now() } } }); } catch (_) { /* ignore */ }
+  }
+  function clearCache() {
+    try { chrome.storage.local.set({ u3c3_cache: {} }); } catch (_) { /* ignore */ }
+  }
+  function formatTimeAgo(ts) {
+    const diff = Date.now() - ts;
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return '刚刚';
+    if (mins < 60) return mins + ' 分钟前';
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return hrs + ' 小时前';
+    return Math.floor(hrs / 24) + ' 天前';
+  }
+
+  function showCacheBanner(code, cachedAt) {
+    const banner = $('cacheBanner');
+    const hint = $('cacheHint');
+    hint.textContent = formatTimeAgo(cachedAt) + ' 已搜索过该号数';
+    banner.dataset.code = code;
+    banner.classList.remove('hidden');
+  }
+  function hideCacheBanner() { $('cacheBanner').classList.add('hidden'); }
+
+  async function bindClearCache() {
+    const brand = $('brandBtn');
+    const clearBtn = $('cacheClear');
+    brand.addEventListener('click', async (ev) => {
+      if (ev.target !== brand && !brand.contains(ev.target)) return;
+      const cache = await getCache();
+      const keys = cache.u3c3_cache ? Object.keys(cache.u3c3_cache) : [];
+      if (!confirm('确定清除所有搜索缓存（' + keys.length + ' 个号数）？')) return;
+      clearCache();
+      hideCacheBanner();
+      await renderStatusArea();
+      refreshStatus();
+      runSearch();
+    });
+    clearBtn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const code = $('cacheBanner').dataset.code;
+      if (!code) return;
+      getCache().then(async (cache) => {
+        if (cache.u3c3_cache && cache.u3c3_cache[code]) {
+          delete cache.u3c3_cache[code];
+          await chrome.storage.local.set({ u3c3_cache: cache.u3c3_cache });
+        }
+        hideCacheBanner();
+        runSearch();   // 重新搜索
+      });
+    });
+  }
+
   // ———————————————— 启动 ————————————————
   async function boot() {
     bindDialog();
+    bindClearCache();
+    bindModeToggle();
     $('panelLink').href = CFG.XL_BASE;   // NAS 迅雷网页版快捷入口
     $('panelLink').target = '_blank';
+    await loadMode();
     await renderStatusArea();
     refreshStatus();
     runSearch();
+  }
+
+  // ———————————————— 下载模式：自动（点击直接下载）/ 手动（文件选择） ————————————————
+  let autoDl = true;
+
+  async function loadMode() {
+    try {
+      const o = await chrome.storage.local.get('autoDl');
+      autoDl = o.autoDl !== false;
+    } catch (_) { /* 默认自动 */ }
+    updateModeBtn();
+  }
+
+  function updateModeBtn() {
+    const b = $('modeToggle');
+    b.textContent = autoDl ? '⚡ 自动下载' : '✋ 手动选文件';
+    b.title = '当前：点结果后' + (autoDl ? '直接自动下载（>200MB 视频，无则全选）' : '先弹出文件选择')
+      + '。点击切换';
+  }
+
+  function bindModeToggle() {
+    $('modeToggle').addEventListener('click', async () => {
+      autoDl = !autoDl;
+      try { await chrome.storage.local.set({ autoDl }); } catch (_) { /* ignore */ }
+      updateModeBtn();
+    });
   }
 
   // ———————————————— 状态区 ————————————————
@@ -85,8 +174,9 @@
     }
   }
 
-  // ———————————————— 搜索（同 UGOS 版） ————————————————
+  // ———————————————— 搜索（同 UGOS 版，增加缓存） ————————————————
   async function runSearch() {
+    hideCacheBanner();
     showStatus('正在搜索…', '', true);
     let tab = null;
     try { [tab] = await chrome.tabs.query({ active: true, currentWindow: true }); } catch (_) {}
@@ -97,6 +187,18 @@
 
     $('query').textContent = code;
     $('query').title = '页面标题：' + title;
+
+    // 先查缓存
+    const cache = await getCache();
+    if (cache.u3c3_cache && cache.u3c3_cache[code]) {
+      const entry = cache.u3c3_cache[code];
+      if (Date.now() - entry.cachedAt < CACHE_TTL) {
+        showCacheBanner(code, entry.cachedAt);
+        renderList(entry.items, true);   // true = 从缓存加载
+        return;
+      }
+    }
+
     showStatus('正在搜索 ' + code + ' …', '', true);
 
     let items = [], netError = null;
@@ -110,6 +212,7 @@
                  : '',
         false);
     }
+    saveCache(code, items);   // 缓存结果
     renderList(items);
   }
 
@@ -138,13 +241,13 @@
     }
   }
 
-  function renderList(items) {
+  function renderList(items, cached) {
     $('status').classList.add('hidden');
     $('list').classList.remove('hidden');
     $('list').innerHTML = '';
     for (const it of items) {
       const li = document.createElement('li');
-      li.className = 'item';
+      li.className = 'item' + (cached ? ' cache-hit' : '');
 
       const titleEl = document.createElement('div');
       titleEl.className = 'item-title';
@@ -156,7 +259,7 @@
 
       const badgeEl = document.createElement('span');
       badgeEl.className = 'badge';
-      badgeEl.textContent = '已复制 ✓';
+      badgeEl.textContent = cached ? '已缓存' : '已复制 ✓';
 
       li.append(titleEl, metaEl, badgeEl);
       li.addEventListener('click', async () => {
@@ -164,9 +267,68 @@
           li.classList.add('copied');
           setTimeout(() => li.classList.remove('copied'), 1200);
         }
-        openSendDialog(it.magnet);
+        if (autoDl) autoDownload(it.magnet);
+        else openSendDialog(it.magnet);
       });
       $('list').appendChild(li);
+    }
+  }
+
+  // ———————————————— 自动下载：解析 → 按规则选文件 → 直接提交（无需确认） ————————————————
+  async function autoDownload(magnet) {
+    const hash = XL.parseInfoHash(magnet);
+    showStatus('正在解析文件列表…', '', true);
+    try {
+      if (!hash) throw new Error('磁力链接无法解析出 infohash');
+      const resp = await XL.parseMagnet(magnet);
+      const meta = XL.resourceMeta(resp);
+      if (!meta || !meta.url) throw new Error('迅雷未能解析该磁力（资源可能无效）');
+
+      // 自动选文件：>200MB 视频；无命中 → 全选
+      let files = XL.flattenResources(resp);
+      let chosen;
+      if (!files.length) {
+        files = [{ name: meta.name, size: meta.file_size, file_index: 0 }];
+        chosen = files;
+      } else {
+        chosen = files.filter(f => XL.autoSelectFile(f));
+        if (!chosen.length) chosen = files;
+      }
+      showStatus('正在提交：' + meta.name,
+        '自动选择 ' + chosen.length + '/' + files.length + ' 个文件 · ' + XL.humanSize(chosen.reduce((s, f) => s + f.size, 0)),
+        true);
+
+      const sub = XL.buildSubFileIndex(meta.file_count, chosen.map(f => f.file_index));
+      const target = await XL.getTarget();
+      await XL.addTask(meta, sub, target);
+
+      // 落实验证：限额用尽时任务被静默丢弃
+      const appeared = await XL.waitForTask(hash, meta.name, target, 9000);
+      if (!appeared) {
+        let quota = false;
+        try { quota = XL.isQuotaExhausted(await XL.getDevice()); } catch (_) {}
+        throw Object.assign(
+          new Error(quota
+            ? '今日免费下载任务数已用完（非内测账号每日 3 个）。内测资格申请：迅雷内测 QQ 群 772445453，或等明日额度刷新'
+            : '任务提交后未出现在迅雷列表，请到 ' + CFG.XL_BASE + ' 面板查看'),
+          { code: quota ? 'QUOTA' : 'NOTASK' });
+      }
+
+      const reg = await XL.getRegistry();
+      reg[hash] = {
+        addedAt: Date.now(),
+        name: meta.name,
+        state: 'active', seen: false,
+        phase: 'PHASE_TYPE_PENDING',
+        sizeText: XL.humanSize(chosen.reduce((s, f) => s + f.size, 0))
+      };
+      await XL.saveRegistry(reg);
+      showStatus('已提交迅雷：' + meta.name,
+        chosen.length + '/' + files.length + ' 个文件 · 进度见上方状态区', false);
+      refreshStatus();
+    } catch (e) {
+      showStatus('自动下载失败',
+        e.code === 'LOGIN' ? e.message : (e.message || String(e)), false);
     }
   }
 

@@ -26,7 +26,9 @@ header {
   gap: 8px;
   font-weight: 600;
   font-size: 13px;
+  cursor: pointer;
 }
+.brand:hover { opacity: 0.8; }
 .ver {
   font-size: 10px;
   font-weight: 700;
@@ -69,6 +71,20 @@ header {
   white-space: nowrap;
 }
 .panel-link:hover { filter: brightness(1.2); color: #ffd28a; }
+.mode-toggle {
+  flex: none;
+  font-size: 11px;
+  font-weight: 600;
+  color: #ffd28a;
+  text-decoration: none;
+  background: #2b2314;
+  border: 1px solid #5c4118;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.mode-toggle:hover { filter: brightness(1.2); }
 .query {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
@@ -82,6 +98,39 @@ header {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ———— 缓存横幅 ———— */
+.cache-banner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 14px;
+  border-bottom: 1px solid #2e2a20;
+  background: #241d14;
+  flex: none;
+}
+.cache-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffb86b;
+  letter-spacing: 1px;
+}
+#cacheHint {
+  flex: 1;
+  font-size: 11px;
+  color: #8b7a54;
+}
+.cache-clear {
+  background: none;
+  border: 1px solid #5c4118;
+  color: #948c7a;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 1px 5px;
+  border-radius: 4px;
+  flex: none;
+}
+.cache-clear:hover { background: #2b2314; color: #ece8df; }
 
 /* ———— 迅雷下载状态区 ———— */
 .dl-section {
@@ -169,6 +218,10 @@ main { overflow-y: auto; flex: 1; min-height: 0; }
 }
 .item:hover { background: #201c14; border-color: #3a3527; }
 .item:active { background: #262118; }
+.item.cache-hit {
+  background: #1a1710;
+  border-color: #3a3020;
+}
 .item-title {
   font-size: 13px;
   color: #ece8df;
@@ -200,6 +253,8 @@ main { overflow-y: auto; flex: 1; min-height: 0; }
 }
 .item.copied .badge { opacity: 1; }
 .item.copied .item-title { color: #34d399; }
+.badge:only-child { opacity: 1; }
+.item.cache-hit .badge { opacity: 1; color: #ffb86b; }
 
 /* ———— 文件选择对话框 ———— */
 .dlg {

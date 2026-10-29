@@ -42,14 +42,14 @@
     'HD', 'SD', 'TS', 'HEVC', 'AVC', 'MP4', 'MKV', 'WMV', 'FLAC', 'AAC',
     'HDMI', 'USB', 'WIFI', 'SSD', 'HDD', 'HDR', 'SDR', 'UHD', 'GPS', 'NFC',
     'OLED', 'LCD', 'CPU', 'GPU', 'RAM', 'RGB', 'BIOS', 'UEFI', 'NVME',
-    'PCIE', 'APK', 'EXE', 'ISO', 'PDF', 'UTF8', 'UUID'
+    'PCIE', 'APK', 'EXE', 'ISO', 'PDF', 'UTF8', 'UUID', 'IPHONE'
   ]);
-  // a. 英文-数字，如 ABF-385（兼容 abf385 / abf-385 小写、无连杠写法）
-  const RE_LETTER_NUM = /\b([A-Za-z]{2,6})-?(\d{2,5})\b/;
+  // a. 英文-数字，如 ABF-385（兼容 abf385 / abf-385 小写、无连杠写法、含空格式如 HEYZO 3990）
+  const RE_LETTER_NUM = /\b([A-Za-z]{2,6})[\s-]?(\d{2,5})\b/;
   // b. FC2PPV+数字，如 FC2PPV 4978035（兼容 FC2-PPV-4978035 / FC2 PPV 4978035）
   const RE_FC2 = /\bFC2[-_ ]?PPV[-_ ]?(\d{6,10})\b/i;
-  // c. 纯数字编号，如 091726-001（兼容下划线 091726_001）
-  const RE_NUM_NUM = /\b(\d{6,8})[-_](\d{3})\b/;
+  // c. 纯数字编号，如 091726-001 / 101026_01（后缀兼容 2~3 位：001、01 均能匹配）
+  const RE_NUM_NUM = /\b(\d{6,8})[-_](\d{2,3})\b/;
 
   function extractCode(title) {
     if (!title) return null;
@@ -165,12 +165,12 @@
 
   // —— 查询变体：u3c3 服务端按字面子串匹配，不同写法召回不同 ——
   // FC2PPV 4744486 → 只查数字（召回全集，客户端过滤收口）
-  // ABF-385 → 补查 ABF385；091726-001 → 补查 091726_001
+  // ABF-385 → 补查 ABF385 + ABF 385\uff08空格式\uff09；091726-001 → 补查 091726_001
   function queryVariants(code) {
     if (code.indexOf('FC2PPV ') === 0) return [code.slice(7)];
     let m = code.match(/^([A-Z]+)-(\d+)$/);
-    if (m && m[2].length <= 5) return [code, m[1] + m[2]];
-    m = code.match(/^(\d{6,8})-(\d{3})$/);
+    if (m && m[2].length <= 5) return [code, m[1] + m[2], m[1] + ' ' + m[2]];
+    m = code.match(/^(\d{6,8})-(\d{2,3})$/);
     if (m) return [code, m[1] + '_' + m[2]];
     return [code];
   }

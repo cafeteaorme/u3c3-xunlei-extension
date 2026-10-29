@@ -7,15 +7,22 @@
 </head>
 <body>
   <header>
-    <div class="brand">
+    <div class="brand" id="brandBtn" title="点击清除所有搜索缓存">
       <span class="logo">XL</span>
       <span>u3c3 搜索<span class="ver">迅雷版</span></span>
     </div>
     <div class="header-right">
+      <a id="modeToggle" class="mode-toggle" title="点击切换下载模式"></a>
       <a id="panelLink" class="panel-link" title="打开 NAS 迅雷网页版面板">网页版 ↗</a>
       <span id="query" class="query">—</span>
     </div>
   </header>
+  <!-- 缓存状态横幅（缓存命中或存在缓存时显示） -->
+  <div id="cacheBanner" class="cache-banner hidden">
+    <span class="cache-label">已搜索</span>
+    <span id="cacheHint"></span>
+    <button id="cacheClear" class="cache-clear" title="清除当前号数的缓存">✕</button>
+  </div>
 
   <!-- 迅雷下载状态区（置顶，仅插件发起的任务） -->
   <section id="dl" class="dl-section hidden">
